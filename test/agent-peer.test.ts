@@ -71,12 +71,35 @@ test('prefers the other agent kind, then this workspace; refuses real ambiguity'
 test('fails clearly with no peer, outside Herdr, or when delivery is refused', () => {
   const t = setup();
   try {
-    t.agents([['w1:p1', 'claude', 'w1', t.repo], ['w1:p2', 'codex', 'w1', t.other]]);
+    t.agents([['w1:p1', 'claude', 'w1', t.repo], ['w2:p1', 'codex', 'w2', t.other]]);
     assert.equal(t.run('w1:p1', ['x']).status, 5);
+    assert.equal(t.run('w1:p1', ['--to', 'pi', 'x']).status, 5);
     assert.equal(t.run('', ['x']).status, 3);
     t.agents([['w1:p1', 'claude', 'w1', t.repo], ['w1:p2', 'codex', 'w1', t.repo]]);
     const r = t.run('w1:p1', ['x'], { BLOCKED: 'w1:p2' });
     assert.equal(r.status, 7);
     assert.match(r.stderr, /could not deliver to w1:p2/);
+  } finally { t.cleanup(); }
+});
+
+test('pi joins by workspace; Claude and Codex still pair by default; --to <kind> reaches pi', () => {
+  const t = setup();
+  try {
+    // pi works in another folder but shares the workspace; another workspace's pi is ignored.
+    t.agents([['w1:p1', 'claude', 'w1', t.repo], ['w1:p2', 'codex', 'w1', t.repo], ['w1:p3', 'pi', 'w1', t.other], ['w2:p1', 'pi', 'w2', t.other]]);
+    let r = t.run('w1:p1', ['x']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(t.sent().split('\n')[0], 'w1:p2');
+    r = t.run('w1:p1', ['--to', 'pi', 'x']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(t.sent().split('\n')[0], 'w1:p3');
+    // pi has no default partner: Claude and Codex are both candidates.
+    r = t.run('w1:p3', ['x']);
+    assert.equal(r.status, 6);
+    r = t.run('w1:p3', ['--to', 'codex', 'x']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(t.sent().split('\n')[0], 'w1:p2');
+    assert.match(t.sent(), /^w1:p2\n\[agent-peer from:pi pane:w1:p3/);
+    assert.match(t.run('w1:p1', ['--list']).stdout, /w1:p3\s+pi/);
   } finally { t.cleanup(); }
 });

@@ -71,6 +71,46 @@ Codex, and `~/.pi/agent/AGENTS.md` for pi:
 
 Sessions read these files at startup, so restart any that are already open.
 
+pi reads `~/.pi/agent/AGENTS.md` and also every `AGENTS.md` from its working
+folder up to the filesystem root. If you keep a shared `~/AGENTS.md` for Codex,
+pi already loads it for any folder under your home directory. Put the line there
+once and keep `~/.pi/agent/AGENTS.md` for pi-only notes, or pi reads it twice.
+
+### Optional: give each agent a role
+
+A peer is easier to use when every agent knows who does what. This setup makes
+pi the security reviewer. Add the routing rule to the Claude and Codex
+instructions, under the peer line:
+
+```markdown
+- **pi is the security reviewer:** route cyber-security and adversarial security
+  review (threat models, auth, secrets, injection, attack paths through a diff or
+  design) to pi with `agent-peer --to pi "<request>"`, naming the scope. Claude and
+  Codex keep correctness and design review. pi reviews code, configs and local or
+  test instances only, never live systems without my explicit go-ahead, and the
+  requester verifies its findings before acting.
+```
+
+And give pi its side of the role in `~/.pi/agent/AGENTS.md`:
+
+```markdown
+## Your role: security reviewer
+
+You are the cyber-security and adversarial security review agent for Claude and
+Codex. When a request arrives, attack the named scope as an adversary would:
+threat model, authentication and authorisation, secrets handling, injection,
+unsafe defaults, dependency and supply-chain risk, and concrete attack paths.
+Report findings ranked by severity, each with the file and line, the exploit path
+or failure scenario, and a fix. Review and report; do not change code unless
+asked. Work on code, configs and local or test instances only, never live
+systems without my explicit go-ahead. Reply to the requester with
+`agent-peer --to <pane> "<findings>"`.
+```
+
+To check that a model has picked it up, ask a fresh session from its
+instructions alone, for example `pi -p "What is your role?"` or
+`codex exec "Who does security review, and how do I ask them?"`.
+
 ## Limits
 
 - Delivery is Herdr's: a message sent mid-turn waits for that turn to end.

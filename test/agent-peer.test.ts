@@ -82,6 +82,21 @@ test('fails clearly with no peer, outside Herdr, or when delivery is refused', (
   } finally { t.cleanup(); }
 });
 
+test('--help prints usage and an unknown flag is refused; neither is sent', () => {
+  const t = setup();
+  try {
+    t.agents([['w1:p1', 'claude', 'w1', t.repo], ['w1:p2', 'codex', 'w1', t.repo]]);
+    let r = t.run('w1:p1', ['--help']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /agent-peer --list/);
+    r = t.run('', ['-h']);
+    assert.equal(r.status, 0, r.stderr);
+    r = t.run('w1:p1', ['--bogus']);
+    assert.equal(r.status, 2);
+    assert.throws(() => t.sent());
+  } finally { t.cleanup(); }
+});
+
 test('pi joins by workspace; Claude and Codex still pair by default; --to <kind> reaches pi', () => {
   const t = setup();
   try {

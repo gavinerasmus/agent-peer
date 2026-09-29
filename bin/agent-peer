@@ -17,6 +17,13 @@ HERDR="${AGENT_PEER_HERDR:-herdr}"
 
 die() { echo "agent-peer: $1" >&2; exit "${2:-1}"; }
 
+# An unrecognised flag must never go out as a message.
+case "${1:-}" in
+  -h|--help) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
+  --to|--list) ;;
+  -*) die "unknown option $1 (see --help)" 2 ;;
+esac
+
 [ -n "${HERDR_PANE_ID:-}" ] || die "not inside a Herdr pane (HERDR_PANE_ID unset)" 3
 
 # A repo is its git toplevel; outside git, the cwd itself.

@@ -1,14 +1,17 @@
 # agent-peer
 
 Let Claude Code, Codex and [pi](https://github.com/earendil-works/pi) sessions message each other
-when they run in [Herdr](https://herdr.dev) panes on the same repo or in the
-same Herdr workspace.
+when they run in [Herdr](https://herdr.dev) panes, whether on the same repo,
+in the same Herdr workspace, or in another repo altogether.
 
 ```sh
 agent-peer "Can you review the diff on this branch?"   # Claude <-> Codex
 agent-peer --to pi "Summarise the open questions"      # a peer by agent kind
+agent-peer --to billing "What does /invoices return?"  # another repo's Claude
+agent-peer --to billing:codex "Review this contract"   # another repo's Codex
 agent-peer --to w8:p1 "Done, over to you"              # a specific pane
 agent-peer --list                                      # your peers
+agent-peer --list --all                                # every agent pane, with its repo
 ```
 
 The message arrives as the other agent's next prompt, queued if it is mid-turn.
@@ -34,6 +37,12 @@ prompt`). `agent-peer` adds only the choice of recipient:
    sends to a peer of a different kind.
 3. If there are still several, the ones in your current Herdr workspace.
 4. If it is still ambiguous, it lists them and asks for `--to <pane>`.
+
+`--to <repo>` looks beyond your peers, at every agent pane whose git repo folder
+is named `<repo>`. It goes to that repo's Claude pane, or to its only agent if
+there is no Claude. `--to <repo>:<kind>` picks the kind instead. An unknown repo
+name lists the repos that have agents open. `--to <pane>` (a Herdr pane id such
+as `w8:p1`) is used as given, in any workspace.
 
 A pi pane in a Claude/Codex workspace therefore never intercepts their default
 sends. Reach it with `--to pi`, and pi picks its recipient with `--to claude`
@@ -67,6 +76,9 @@ Codex, and `~/.pi/agent/AGENTS.md` for pi:
   reply to a received `[agent-peer from:… pane:<id>]` message with
   `agent-peer --to <id> "<reply>"`, and only if a reply is needed). Use it for
   handoffs, second opinions and review requests instead of asking me to relay.
+- **Other repos:** to reach the agent already open on another repo, use
+  `agent-peer --to <repo> "<message>"` (its Claude) or `--to <repo>:codex`;
+  `agent-peer --list --all` shows every agent pane and its repo.
 ```
 
 Sessions read these files at startup, so restart any that are already open.

@@ -118,3 +118,29 @@ test('pi joins by workspace; Claude and Codex still pair by default; --to <kind>
     assert.match(t.run('w1:p1', ['--list']).stdout, /w1:p3\s+pi/);
   } finally { t.cleanup(); }
 });
+
+test('--to <repo>[:kind] reaches another repo; Claude by default; --list --all shows it', () => {
+  const t = setup();
+  try {
+    // "other" is a plain folder in another workspace, so its repo name is its folder name.
+    t.agents([['w1:p1', 'claude', 'w1', t.repo], ['w1:p2', 'codex', 'w1', t.repo],
+      ['w2:p1', 'claude', 'w2', t.other], ['w2:p2', 'codex', 'w2', t.other]]);
+    let r = t.run('w1:p1', ['--to', 'other', 'x']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(t.sent().split('\n')[0], 'w2:p1');
+    assert.match(t.sent(), /^w2:p1\n\[agent-peer from:claude pane:w1:p1 repo:repo\] x/);
+    r = t.run('w1:p1', ['--to', 'other:codex', 'x']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(t.sent().split('\n')[0], 'w2:p2');
+    // A pane id is still taken as given, across workspaces.
+    r = t.run('w1:p1', ['--to', 'w2:p2', 'x']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(t.sent().split('\n')[0], 'w2:p2');
+    r = t.run('w1:p1', ['--to', 'nosuch', 'x']);
+    assert.equal(r.status, 5);
+    assert.match(r.stderr, /no agent pane in a repo named nosuch[\s\S]*other/);
+    assert.equal(t.run('w1:p1', ['--to', 'other:pi', 'x']).status, 5);
+    assert.doesNotMatch(t.run('w1:p1', ['--list']).stdout, /w2:p1/);
+    assert.match(t.run('w1:p1', ['--list', '--all']).stdout, /w2:p1\s+claude\s+idle\s+other/);
+  } finally { t.cleanup(); }
+});

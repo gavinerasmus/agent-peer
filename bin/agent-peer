@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# agent-peer — message another agent (Claude, Codex, pi) working in the same
-# repo or Herdr workspace. No realms, tmux or inbox involved.
+# agent-peer — message another agent (Claude, Codex, pi) in a Herdr pane:
+# a peer in the same repo or workspace, or an agent in another repo.
+# No realms, tmux or inbox involved.
 #
-#   agent-peer "<message>"               send to the one peer (Claude <-> Codex)
-#   agent-peer --to <pane> "<message>"   send to a named pane (e.g. w8:p1)
-#   agent-peer --to <kind> "<message>"   send to a peer by agent kind (e.g. pi)
-#   agent-peer --list                    show peers
+#   agent-peer "<message>"                    send to the one peer (Claude <-> Codex)
+#   agent-peer --to <kind> "<message>"        a peer by agent kind (e.g. pi)
+#   agent-peer --to <repo> "<message>"        the Claude pane in another repo
+#   agent-peer --to <repo>:<kind> "<message>" another repo's agent of that kind
+#   agent-peer --to <pane> "<message>"        a named pane (e.g. w8:p1)
+#   agent-peer --list [--all]                 show peers (--all: every agent pane)
 #
 # Herdr is the source of truth for who is where: `herdr agent list` names each
 # pane's agent kind, workspace and cwd, and `herdr agent prompt` submits text
@@ -31,6 +34,12 @@ repo_of() { git -C "$1" rev-parse --show-toplevel 2>/dev/null || printf '%s\n' "
 
 agents=$("$HERDR" agent list) || die "herdr agent list failed" 3
 rows=$(jq -r '.result.agents[] | [.pane_id, .agent, .workspace_id, .agent_status, .cwd] | @tsv' <<<"$agents")
+# The same rows with each pane's repo folder name appended, for cross-repo sends.
+rows_repo=""
+while IFS=$'\t' read -r pane kind ws status cwd; do
+  [ -n "$pane" ] || continue
+  rows_repo+="$pane"$'\t'"$kind"$'\t'"$ws"$'\t'"$status"$'\t'"$cwd"$'\t'"$(basename "$(repo_of "$cwd")")"$'\n'
+done <<<"$rows"
 
 self_row=$(awk -F'\t' -v p="$HERDR_PANE_ID" '$1==p' <<<"$rows")
 [ -n "$self_row" ] || die "this pane ($HERDR_PANE_ID) is not a detected agent" 3
@@ -65,16 +74,21 @@ pick_one() {
 
 if [ "${1:-}" = "--list" ]; then
   echo "repo: $self_repo  workspace: $self_ws  (you: $HERDR_PANE_ID $self_kind)"
-  printf '%s' "$peers" | awk -F'\t' '{printf "  %-8s %-7s %-10s %s\n", $1, $2, $4, $5}'
+  if [ "${2:-}" = "--all" ]; then
+    printf '%s' "$rows_repo" | awk -F'\t' -v me="$HERDR_PANE_ID" \
+      '$1!=me {printf "  %-8s %-7s %-10s %-20s %s\n", $1, $2, $4, $6, $5}'
+  else
+    printf '%s' "$peers" | awk -F'\t' '{printf "  %-8s %-7s %-10s %s\n", $1, $2, $4, $5}'
+  fi
   exit 0
 fi
 
 target=""
 if [ "${1:-}" = "--to" ]; then
-  [ $# -ge 3 ] || die "usage: agent-peer --to <pane|kind> \"<message>\"" 2
+  [ $# -ge 3 ] || die "usage: agent-peer --to <pane|kind|repo[:kind]> \"<message>\"" 2
   target="$2"; shift 2
 fi
-[ $# -eq 1 ] || die "usage: agent-peer [--to <pane|kind>] \"<message>\" | --list" 2
+[ $# -eq 1 ] || die "usage: agent-peer [--to <pane|kind|repo[:kind]>] \"<message>\" | --list [--all]" 2
 msg="$1"
 
 if [ -z "$target" ]; then
@@ -85,11 +99,32 @@ if [ -z "$target" ]; then
   [ -n "$other" ] || other="$peers"
   [ -n "$other" ] || die "no other agent pane in $self_repo or workspace $self_ws" 5
   target=$(pick_one "$other" "peer") || exit $?
-elif [[ "$target" != *:* ]]; then
-  # A bare name is an agent kind: claude, codex, pi.
+elif [[ "$target" =~ ^w[^:]*:p[0-9]+$ ]]; then
+  :  # A pane id is used as given.
+elif [[ "$target" =~ ^(claude|codex|pi)$ ]]; then
+  # A bare agent kind means a peer of that kind.
   other=$(printf '%s' "$peers" | awk -F'\t' -v k="$target" '$2==k')
   [ -n "$other" ] || die "no $target peer in $self_repo or workspace $self_ws" 5
   target=$(pick_one "$other" "$target peer") || exit $?
+else
+  # Anything else is another repo, by folder name, with an optional :kind.
+  # Without a kind it goes to that repo's Claude pane, else its only agent.
+  name="${target%%:*}"; want=""
+  [[ "$target" == *:* ]] && want="${target#*:}"
+  there=$(printf '%s' "$rows_repo" | awk -F'\t' -v me="$HERDR_PANE_ID" -v r="$name" '$1!=me && $6==r')
+  if [ -z "$there" ]; then
+    echo "agent-peer: no agent pane in a repo named $name; repos with agents:" >&2
+    printf '%s' "$rows_repo" | cut -f6 | sort -u | sed 's/^/  /' >&2
+    exit 5
+  fi
+  if [ -n "$want" ]; then
+    other=$(printf '%s' "$there" | awk -F'\t' -v k="$want" '$2==k')
+  else
+    other=$(printf '%s' "$there" | awk -F'\t' '$2=="claude"')
+    [ -n "$other" ] || other="$there"
+  fi
+  [ -n "$other" ] || die "no ${want} agent in $name" 5
+  target=$(pick_one "$(cut -f1-5 <<<"$other")" "agent in $name") || exit $?
 fi
 
 envelope="[agent-peer from:$self_kind pane:$HERDR_PANE_ID repo:$(basename "$self_repo")] $msg

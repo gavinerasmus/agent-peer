@@ -16,6 +16,14 @@
 # carries the sender's pane id so the reply can come straight back.
 set -euo pipefail
 
+# On Windows (Git Bash, MSYS, Cygwin) the PowerShell port does the work.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    command -v pwsh >/dev/null || { echo "agent-peer: needs PowerShell 7.3+ (pwsh) on Windows" >&2; exit 3; }
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      exec pwsh -NoProfile -NonInteractive -File "$(cygpath -w "$(dirname "$0")/agent-peer.ps1")" "$@" ;;
+esac
+
 HERDR="${AGENT_PEER_HERDR:-herdr}"
 
 die() { echo "agent-peer: $1" >&2; exit "${2:-1}"; }

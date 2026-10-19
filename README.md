@@ -53,7 +53,8 @@ says so rather than reporting success.
 
 ## Install
 
-Requires Herdr, `jq`, `git` and bash. Put the script anywhere on your `PATH`:
+On macOS and Linux, it requires Herdr, `jq`, `git` and bash. Put the script anywhere
+on your `PATH`:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/gavinerasmus/agent-peer/main/bin/agent-peer \
@@ -61,6 +62,31 @@ curl -fsSL https://raw.githubusercontent.com/gavinerasmus/agent-peer/main/bin/ag
 ```
 
 Or clone the repo and link `bin/agent-peer`, so `git pull` updates it.
+
+### Windows
+
+Requires [Herdr for Windows](https://herdr.dev), Git for Windows (which provides
+Git Bash) and PowerShell 7.3+ (`winget install Microsoft.PowerShell`). No `jq`.
+Clone the repo and add its `bin` folder to your user `PATH`:
+
+```powershell
+git clone https://github.com/gavinerasmus/agent-peer $HOME\src\agent-peer
+[Environment]::SetEnvironmentVariable('Path', "$HOME\src\agent-peer\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
+```
+
+If you download `agent-peer.ps1` on its own instead, run `Unblock-File` on it:
+Windows blocks unsigned scripts downloaded from the internet.
+
+The command is `agent-peer` in every agent. Claude Code runs shell commands in
+Git Bash, which runs `bin/agent-peer`, and that hands off to `agent-peer.ps1`.
+PowerShell (Codex, pi) runs `agent-peer.ps1` directly. Windows PowerShell 5.1
+relaunches it under `pwsh`. `cmd.exe` is deliberately not supported: it
+re-parses arguments, which corrupts messages and opens them to injection.
+
+If an agent's shell is Windows PowerShell 5.1 with scripts disabled, it cannot
+run `agent-peer.ps1` until you allow local scripts, for example with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. That is your call to make
+for your machine.
 
 ## Tell your agents about it
 
@@ -79,6 +105,14 @@ Codex, and `~/.pi/agent/AGENTS.md` for pi:
 - **Other repos:** to reach the agent already open on another repo, use
   `agent-peer --to <repo> "<message>"` (its Claude) or `--to <repo>:codex`;
   `agent-peer --list --all` shows every agent pane and its repo.
+```
+
+On Windows, add one more line for agents whose shell is PowerShell (Codex, pi):
+
+```markdown
+- In PowerShell, wrap the message in single quotes
+  (`agent-peer --to w1:p2 'cost is $5'`): double quotes expand `$variables`
+  before `agent-peer` sees them.
 ```
 
 Sessions read these files at startup, so restart any that are already open.
@@ -130,12 +164,20 @@ instructions alone, for example `pi -p "What is your role?"` or
   when you need one.
 - A message is a prompt. It carries no extra authority, so the recipient's
   own permission settings still apply.
+- On Windows, a bare `--` typed in PowerShell is caught only as the first
+  argument (`agent-peer -- x`). PowerShell removes it before the script runs,
+  so `agent-peer --to w1:p2 -- x` sends `x`.
 
 ## Tests
 
 ```sh
 node --test test/*.test.ts   # Node 24+; uses a fake herdr, no live panes needed
 ```
+
+Every test runs against both `bin/agent-peer` (bash) and `bin/agent-peer.ps1`
+(pwsh). The pwsh runs are skipped where `pwsh` is not installed. On Windows the
+bash runs go through Git Bash and its hand-off to PowerShell, and the
+Windows-only tests (batch-file refusal, the 5.1 relaunch, path matching) run too.
 
 ## Licence
 

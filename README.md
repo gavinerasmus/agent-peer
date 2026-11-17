@@ -107,6 +107,12 @@ Codex, and `~/.pi/agent/AGENTS.md` for pi:
   `agent-peer --list --all` shows every agent pane and its repo.
 ```
 
+A handoff that starts parallel work should name the frozen day-0 contract (schema, migration
+numbers, protocol, golden tests), the files the receiving track owns, its merge-train slot, and
+that open questions are batched to the decision-maker once a day. Which provider builds is a
+per-project choice recorded in the repo's `HANDOFF.md` (default Codex builds, Claude coordinates).
+See `~/.agents/docs/estimation-and-start-of-work.md`.
+
 On Windows, add one more line for agents whose shell is PowerShell (Codex, pi):
 
 ```markdown
